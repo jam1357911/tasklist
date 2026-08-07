@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#191613">
+<meta name="description" content="Tasklist 任務看板 — 無需登入、資料存於本機嘅看板工具。未完成／工作中／已完成，多專案切換，手機電腦通用。">
+<title>Tasklist 任務看板</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect x='4' y='4' width='92' height='92' rx='20' fill='%23FFD449' stroke='%23191613' stroke-width='8'/%3E%3Cpath d='M30 52 L45 67 L72 36' stroke='%23191613' stroke-width='10' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;900&family=Outfit:wght@400;600;700&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#191613;
+  --paper:#F6EEDF;
+  --panel:#FFFDF6;
+  --shade:#EFE5D2;
+  --yellow:#FFD449;
+  --blue:#7EC8FF;
+  --green:#7FD8A4;
+  --pink:#FF9AA2;
+  --purple:#C9A7FF;
+  --orange:#FFAE5C;
+  --red:#FF6B6B;
+  --white:#FFFFFF;
+  --font-display:'Unbounded','Noto Sans TC',sans-serif;
+  --font-body:'Outfit','Noto Sans TC',sans-serif;
+  --border:2.5px solid var(--ink);
+  --shadow:4px 4px 0 var(--ink);
+  --topbar-h:64px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  font-family:var(--font-body);
+  font-size:15px;
+  color:var(--ink);
+  background-color:var(--paper);
+  background-image:radial-gradient(rgba(25,22,19,.09) 1.6px,transparent 1.6px);
+  background-size:22px 22px;
+  overflow:hidden;
+  -webkit-tap-highlight-color:transparent;
+  overscroll-behavior:none;
+}
+body.dragging{cursor:grabbing;user-select:none;}
+body.dragging *{cursor:grabbing !important;}
+button{font-family:inherit;color:inherit;cursor:pointer;background:none;border:none;}
+input,textarea{font-family:inherit;color:inherit;}
+.hidden{display:none !important;}
+
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  border:var(--border);border-radius:8px;
+  padding:9px 16px;font-weight:700;font-size:14px;line-height:1;
+  background:var(--white);
+  box-shadow:var(--shadow);
+  transition:transform .12s ease,box-shadow .12s ease,background .12s ease;
+  min-height:42px;
+}
+.btn:hover{transform:translate(-1px,-1px);box-shadow:5px 5px 0 var(--ink);}
+.btn:active{transform:translate(3px,3px);box-shadow:0 0 0 var(--ink);}
+.btn-ink{background:var(--ink);color:var(--paper);}
+.btn-danger{background:var(--red);color:#fff;}
+.btn-ghost{box-shadow:none;background:transparent;}
+.btn-ghost:hover{background:var(--white);box-shadow:3px 3px 0 var(--ink);transform:translate(-1px,-1px);}
+.btn-ghost:active{box-shadow:none;transform:translate(2px,2px);}
+.btn:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible{
+  outline:3px solid var(--blue);outline-offset:2px;
+}
+
+.topbar{
+  position:sticky;top:0;z-index:50;
+  height:var(--topbar-h);
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:0 20px;
+  background:var(--ink);color:var(--paper);
+}
+.topbar::after{
+  content:'';position:absolute;left:0;right:0;bottom:-4px;height:4px;
+  background:linear-gradient(90deg,var(--yellow) 0 25%,var(--blue) 25% 50%,var(--green) 50% 75%,var(--red) 75% 100%);
+}
+.brand{display:flex;align-items:center;gap:12px;min-width:0;}
+.brand-mark{
+  width:34px;height:34px;flex:none;
+  display:grid;place-items:center;
+  background:var(--yellow);color:var(--ink);
+  border:2.5px solid var(--ink);border-radius:9px;
+  box-shadow:3px 3px 0 rgba(246,238,223,.28);
+  transform:rotate(-5deg);
+  font-family:var(--font-display);font-weight:900;font-size:17px;
+}
+.brand-text{display:flex;flex-direction:column;line-height:1.1;min-width:0;}
+.brand-name{font-family:var(--font-display);font-weight:900;font-size:16px;letter-spacing:.06em;white-space:nowrap;}
+.brand-sub{font-size:11px;font-weight:500;opacity:.72;letter-spacing:.28em;}
+.proj-wrap{position:relative;display:flex;align-items:center;gap:10px;min-width:0;}
+.proj-btn{
+  background:var(--panel);color:var(--ink);
+  border:2.5px solid var(--ink);border-radius:8px;
+  box-shadow:3px 3px 0 rgba(246,238,223,.3);
+  padding:9px 14px;font-weight:700;font-size:14px;
+  display:inline-flex;align-items:center;gap:8px;max-width:min(60vw,340px);
+  transition:transform .12s ease,box-shadow .12s ease;
+  min-height:42px;
+}
+.proj-btn:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 rgba(246,238,223,.4);}
+.proj-btn:active{transform:translate(2px,2px);box-shadow:0 0 0 rgba(246,238,223,.4);}
+.proj-btn .proj-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.proj-btn .chev{flex:none;transition:transform .15s ease;}
+.proj-wrap.open .chev{transform:rotate(180deg);}
+.icon-add{
+  width:42px;height:42px;flex:none;
+  display:grid;place-items:center;
+  border:2.5px solid var(--paper);border-radius:8px;
+  color:var(--paper);font-size:22px;font-weight:700;line-height:1;
+  transition:all .12s ease;
+}
+.icon-add:hover{background:var(--paper);color:var(--ink);transform:translate(-1px,-1px);}
+.icon-add:active{transform:translate(2px,2px);}
+
+.proj-menu{
+  position:absolute;top:calc(100% + 14px);right:0;z-index:60;
+  width:min(300px,calc(100vw - 24px));
+  background:var(--panel);color:var(--ink);
+  border:3px solid var(--ink);border-radius:12px;
+  box-shadow:6px 6px 0 var(--ink);
+  animation:menuIn .16s ease-out;transform-origin:top right;
+  overflow:hidden;
+}
+@keyframes menuIn{from{opacity:0;transform:translateY(-8px) scale(.96);}}
+.proj-menu-head{
+  padding:10px 14px;font-family:var(--font-display);font-size:11px;font-weight:700;
+  letter-spacing:.22em;border-bottom:2.5px solid var(--ink);background:var(--shade);
+}
+.proj-list{max-height:46vh;overflow-y:auto;}
+.proj-item{
+  display:flex;align-items:center;gap:10px;width:100%;
+  padding:11px 12px;text-align:left;border-bottom:2px dashed rgba(25,22,19,.2);
+  transition:background .1s ease;
+}
+.proj-item:hover{background:var(--shade);}
+.proj-item.active{background:var(--yellow);}
+.proj-item-name{flex:1;font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.proj-item-count{
+  flex:none;font-family:var(--font-display);font-size:10px;font-weight:700;
+  background:var(--white);border:2px solid var(--ink);border-radius:999px;padding:3px 8px;
+}
+.mini-btn{
+  flex:none;width:30px;height:30px;display:grid;place-items:center;
+  border:2px solid var(--ink);border-radius:7px;background:var(--white);font-size:13px;
+  transition:all .1s ease;
+}
+.mini-btn:hover{transform:translate(-1px,-1px);box-shadow:2px 2px 0 var(--ink);}
+.mini-btn:active{transform:translate(1px,1px);box-shadow:none;}
+.proj-menu-add{
+  display:flex;align-items:center;gap:8px;width:100%;
+  padding:12px 14px;font-weight:700;font-size:14px;text-align:left;
+  border-top:2.5px solid var(--ink);background:var(--panel);
+  transition:background .1s ease;
+}
+.proj-menu-add:hover{background:var(--green);}
+.proj-menu-note{
+  padding:9px 14px;font-size:11px;opacity:.68;
+  border-top:2px dashed rgba(25,22,19,.25);background:var(--shade);
+}
+
+.board{
+  height:calc(100vh - var(--topbar-h));
+  height:calc(100dvh - var(--topbar-h));
+  padding:22px 20px 18px;
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;
+}
+.column{
+  display:flex;flex-direction:column;min-width:0;min-height:0;
+  background:var(--panel);
+  border:3px solid var(--ink);border-radius:14px;
+  box-shadow:6px 6px 0 rgba(25,22,19,.85);
+  overflow:hidden;
+  transition:outline-color .1s ease;
+  outline:3px dashed transparent;outline-offset:-8px;
+}
+.column.drop-hot{outline-color:var(--ink);background:#FFF9E8;}
+.col-head{
+  flex:none;display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:12px 14px;
+  background:var(--accent,var(--yellow));
+  border-bottom:3px solid var(--ink);
+}
+.col-title{display:flex;align-items:center;gap:10px;min-width:0;}
+.col-emoji{
+  width:38px;height:38px;flex:none;display:grid;place-items:center;font-size:18px;
+  background:rgba(255,255,255,.62);border:2.5px solid var(--ink);border-radius:10px;
+  box-shadow:2px 2px 0 var(--ink);
+}
+.col-names{display:flex;flex-direction:column;line-height:1.15;min-width:0;}
+.col-name{font-size:17px;font-weight:900;white-space:nowrap;}
+.col-en{font-family:var(--font-display);font-size:9px;font-weight:700;letter-spacing:.3em;opacity:.75;}
+.col-count{
+  flex:none;font-family:var(--font-display);font-weight:900;font-size:13px;
+  background:var(--ink);color:var(--paper);
+  border-radius:999px;padding:5px 12px;min-width:38px;text-align:center;
+}
+.col-body{
+  flex:1;min-height:0;overflow-y:auto;
+  display:flex;flex-direction:column;gap:14px;
+  padding:14px;
+  scrollbar-width:thin;scrollbar-color:var(--ink) transparent;
+}
+.col-body::-webkit-scrollbar{width:8px;}
+.col-body::-webkit-scrollbar-thumb{background:var(--ink);border-radius:99px;}
+.col-body::-webkit-scrollbar-track{background:transparent;}
+
+.card{
+  flex:none;
+  background:var(--white);
+  border:var(--border);border-radius:10px;
+  padding:12px 13px;
+  box-shadow:var(--shadow);
+  cursor:grab;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;
+  transition:transform .12s ease,box-shadow .12s ease,opacity .12s ease;
+}
+.card:hover{transform:translate(-2px,-2px) rotate(-.4deg);box-shadow:6px 6px 0 var(--ink);}
+.card.pop{animation:cardIn .38s cubic-bezier(.2,.9,.3,1.25) both;}
+@keyframes cardIn{from{opacity:0;transform:translateY(14px) scale(.94) rotate(-1.5deg);}}
+.card.drag-src{opacity:.32;border-style:dashed;box-shadow:none;transform:none;}
+.card.untitled .card-title{opacity:.55;font-style:italic;}
+.card-title{font-size:15px;font-weight:700;line-height:1.35;word-break:break-word;}
+.card-content{
+  margin-top:5px;font-size:13px;line-height:1.5;color:rgba(25,22,19,.72);
+  white-space:pre-line;word-break:break-word;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.card-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;}
+.card-date{font-family:var(--font-display);font-size:9px;font-weight:700;letter-spacing:.08em;opacity:.6;}
+.card-actions{display:flex;gap:6px;opacity:0;transition:opacity .12s ease;}
+.card:hover .card-actions{opacity:1;}
+@media (hover:none){.card-actions{opacity:1;}}
+.move-btn{
+  width:28px;height:28px;display:grid;place-items:center;
+  border:2px solid var(--ink);border-radius:7px;
+  background:rgba(255,255,255,.66);font-size:11px;line-height:1;
+  transition:all .1s ease;
+}
+.move-btn:hover{background:var(--white);transform:translate(-1px,-1px);box-shadow:2px 2px 0 var(--ink);}
+.move-btn:active{transform:translate(1px,1px);box-shadow:none;}
+
+.add-task{
+  flex:none;margin:0 14px 14px;min-height:46px;
+  border:2.5px dashed var(--ink);border-radius:10px;
+  font-weight:700;font-size:14px;background:transparent;
+  transition:all .12s ease;
+}
+.add-task:hover{background:var(--white);box-shadow:var(--shadow);transform:translate(-1px,-1px);}
+.add-task:active{transform:translate(2px,2px);box-shadow:none;}
+
+.empty-hint{
+  flex:none;display:flex;flex-direction:column;align-items:center;gap:6px;
+  padding:22px 14px;text-align:center;
+  border:2.5px dashed rgba(25,22,19,.32);border-radius:10px;
+  color:rgba(25,22,19,.62);font-size:13px;line-height:1.5;
+}
+.empty-hint .empty-emoji{font-size:26px;}
+
+.ghost{
+  position:fixed;z-index:200;pointer-events:none;margin:0;
+  transform:rotate(3deg) scale(1.04);
+  box-shadow:10px 12px 0 rgba(25,22,19,.55);
+  transition:none;
+}
+
+.modal-backdrop{
+  position:fixed;inset:0;z-index:100;
+  background:rgba(25,22,19,.5);
+  display:flex;align-items:center;justify-content:center;
+  padding:20px;
+  animation:fadeIn .15s ease-out;
+}
+@keyframes fadeIn{from{opacity:0;}}
+.modal{
+  width:min(520px,94vw);max-height:min(86vh,640px);overflow-y:auto;
+  background:var(--panel);
+  border:3px solid var(--ink);border-radius:14px;
+  box-shadow:8px 8px 0 var(--ink);
+  padding:20px;
+  animation:modalIn .22s cubic-bezier(.2,.9,.3,1.15);
+}
+@keyframes modalIn{from{opacity:0;transform:translateY(16px) scale(.96);}}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.modal-tag{
+  font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:.2em;
+  background:var(--yellow);border:2.5px solid var(--ink);border-radius:999px;
+  padding:6px 14px;box-shadow:2px 2px 0 var(--ink);
+}
+.icon-x{
+  width:36px;height:36px;display:grid;place-items:center;
+  border:2.5px solid var(--ink);border-radius:9px;background:var(--white);
+  font-size:15px;font-weight:700;transition:all .1s ease;
+}
+.icon-x:hover{background:var(--red);color:#fff;transform:translate(-1px,-1px) rotate(4deg);box-shadow:3px 3px 0 var(--ink);}
+.icon-x:active{transform:translate(1px,1px);box-shadow:none;}
+.field-label{
+  display:block;margin:14px 0 6px;
+  font-family:var(--font-display);font-size:10px;font-weight:700;letter-spacing:.24em;opacity:.72;
+}
+.input{
+  width:100%;border:var(--border);border-radius:9px;
+  background:var(--white);padding:11px 13px;font-size:14px;
+  transition:box-shadow .12s ease;
+}
+.input:focus{outline:none;box-shadow:4px 4px 0 var(--yellow);}
+.title-input{font-size:16px;font-weight:700;}
+textarea.input{resize:vertical;min-height:92px;line-height:1.55;}
+.palette{display:flex;flex-wrap:wrap;gap:12px;padding:4px 2px;}
+.palette-dot{
+  width:36px;height:36px;border-radius:50%;
+  border:2.5px solid var(--ink);
+  transition:transform .12s ease,box-shadow .12s ease;
+}
+.palette-dot:hover{transform:translate(-1px,-1px) scale(1.06);box-shadow:3px 3px 0 var(--ink);}
+.palette-dot.selected{transform:translate(-1px,-1px) scale(1.08);box-shadow:3px 3px 0 var(--ink);outline:2.5px solid var(--ink);outline-offset:3px;}
+.seg{display:flex;border:var(--border);border-radius:10px;overflow:hidden;background:var(--white);}
+.seg-btn{
+  flex:1;padding:11px 4px;font-weight:700;font-size:13.5px;
+  border-right:2.5px solid var(--ink);
+  transition:background .1s ease,color .1s ease;
+  display:flex;align-items:center;justify-content:center;gap:6px;
+}
+.seg-btn:last-child{border-right:none;}
+.seg-btn:hover{background:var(--shade);}
+.seg-btn.selected{background:var(--ink);color:var(--paper);}
+.seg-dot{width:9px;height:9px;border-radius:50%;border:1.5px solid currentColor;flex:none;}
+.modal-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:22px;}
+.prompt-panel{width:min(420px,94vw);}
+.prompt-panel .input{margin-top:4px;}
+
+@media (max-width:768px){
+  :root{--topbar-h:58px;}
+  .topbar{padding:0 12px;}
+  .brand-mark{width:30px;height:30px;font-size:15px;}
+  .brand-name{font-size:13.5px;}
+  .brand-sub{display:none;}
+  .proj-btn{padding:8px 12px;font-size:13.5px;max-width:44vw;}
+  .board{
+    display:flex;gap:14px;
+    overflow-x:auto;overflow-y:hidden;
+    scroll-snap-type:x mandatory;
+    padding:16px 12px 12px;
+  }
+  body.dragging .board{scroll-snap-type:none;}
+  .column{flex:none;width:84vw;scroll-snap-align:center;}
+  .modal-backdrop{padding:0;align-items:flex-end;}
+  .modal{
+    width:100%;max-width:none;max-height:88dvh;
+    border-radius:18px 18px 0 0;border-bottom:none;box-shadow:none;
+    padding:18px 16px calc(18px + env(safe-area-inset-bottom));
+    animation:sheetIn .24s cubic-bezier(.2,.9,.3,1.05);
+  }
+  @keyframes sheetIn{from{transform:translateY(100%);}}
+  .modal-foot{flex-wrap:wrap;}
+  .modal-foot .btn{flex:1;}
+}
+@media (max-width:400px){
+  .proj-btn .proj-label{max-width:30vw;}
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark">✓</div>
+    <div class="brand-text">
+      <span class="brand-name">TASKLIST</span>
+      <span class="brand-sub">任務看板</span>
+    </div>
+  </div>
+  <div class="proj-wrap" id="projWrap">
+    <button class="proj-btn" id="projBtn" aria-haspopup="true" aria-expanded="false">
+      <span aria-hidden="true">📁</span>
+      <span class="proj-label" id="projName">我的專案</span>
+      <svg class="chev" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="icon-add" id="addProjBtn" title="新增專案" aria-label="新增專案">＋</button>
+    <div class="proj-menu hidden" id="projMenu" role="menu">
+      <div class="proj-menu-head">切換專案</div>
+      <div class="proj-list" id="projList"></div>
+      <button class="proj-menu-add" id="projMenuAdd">＋ 新增專案</button>
+      <div class="proj-menu-note">🔒 資料只儲存在此瀏覽器本機，無需登入</div>
+    </div>
+  </div>
+</header>
+
+<main class="board" id="board"></main>
+
+<div class="modal-backdrop hidden" id="taskModal">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="任務編輯">
+    <div class="modal-head">
+      <span class="modal-tag" id="taskModalTag">編輯任務</span>
+      <button class="icon-x" id="taskClose" aria-label="關閉">✕</button>
+    </div>
+    <label class="field-label" for="taskTitle">標題</label>
+    <input class="input title-input" id="taskTitle" maxlength="80" placeholder="任務標題" autocomplete="off">
+    <label class="field-label" for="taskContent">內容</label>
+    <textarea class="input" id="taskContent" rows="4" placeholder="補充內容…"></textarea>
+    <label class="field-label">顏色</label>
+    <div class="palette" id="palette"></div>
+    <label class="field-label">狀態</label>
+    <div class="seg" id="statusSeg"></div>
+    <div class="modal-foot">
+      <button class="btn btn-danger" id="taskDelete">🗑 刪除任務</button>
+      <button class="btn btn-ink" id="taskSave">完成</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop hidden" id="promptModal">
+  <div class="modal prompt-panel" role="dialog" aria-modal="true" aria-label="輸入名稱">
+    <div class="modal-head">
+      <span class="modal-tag" id="promptTitle">新增專案</span>
+      <button class="icon-x" id="promptClose" aria-label="關閉">✕</button>
+    </div>
+    <label class="field-label" for="promptInput">專案名稱</label>
+    <input class="input title-input" id="promptInput" maxlength="30" placeholder="例如：工作、讀書、生活…" autocomplete="off">
+    <div class="modal-foot">
+      <button class="btn btn-ghost" id="promptCancel">取消</button>
+      <button class="btn btn-ink" id="promptOk">確定</button>
+    </div>
+  </div>
+</div>
+
+<noscript>此看板需要啟用 JavaScript 才能使用。</noscript>
+
+<script>
+'use strict';
+const STORAGE_KEY = 'tasklist-board-v1';
+const PALETTE = ['#FFD449', '#FF9AA2', '#7FD8A4', '#7EC8FF', '#C9A7FF', '#FFAE5C', '#FF6B6B', '#FFFFFF'];
+const STATUS_ORDER = ['todo', 'doing', 'done'];
+const COLUMNS = [
+  { status: 'todo', name: '未完成', en: 'TO DO', emoji: '✏️', accent: '#FFD449', empty: '仲未有任務，撳下面「＋ 新增任務」開始啦！' },
+  { status: 'doing', name: '工作中', en: 'IN PROGRESS', emoji: '⚡', accent: '#7EC8FF', empty: '未有進行中嘅任務，拖一張卡過嚟啦！' },
+  { status: 'done', name: '已完成', en: 'DONE', emoji: '✅', accent: '#7FD8A4', empty: '完成嘅任務會擺喺度 ✨' }
+];
+
+const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+const boardEl = $('#board');
+
+function uid() {
+  return (window.crypto && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 9);
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (d && Array.isArray(d.projects) && Array.isArray(d.tasks) && d.projects.length) return d;
+    }
+  } catch (err) {}
+  const p = { id: uid(), name: '我的專案', createdAt: Date.now() };
+  return { currentProjectId: p.id, projects: [p], tasks: [] };
+}
+
+let state = loadState();
+let firstRender = true;
+let suppressClick = false;
+
+function save() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (err) {}
+}
+
+function currentProject() {
+  return state.projects.find(p => p.id === state.currentProjectId) || state.projects[0];
+}
+
+function projectTasks(pid) {
+  return state.tasks.filter(t => t.projectId === pid);
+}
+
+function fmtDate(ts) {
+  const d = new Date(ts);
+  return (d.getMonth() + 1) + '月' + d.getDate() + '日';
+}
+
+function el(tag, cls, text) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text != null) node.textContent = text;
+  return node;
+}
+
+function renderBoard() {
+  const proj = currentProject();
+  state.currentProjectId = proj.id;
+  $('#projName').textContent = proj.name;
+  document.title = proj.name + '｜Tasklist 任務看板';
+  boardEl.textContent = '';
+  const tasks = projectTasks(proj.id);
+
+  COLUMNS.forEach(col => {
+    const colTasks = tasks.filter(t => t.status === col.status);
+    const section = el('section', 'column');
+    section.dataset.status = col.status;
+    section.style.setProperty('--accent', col.accent);
+
+    const head = el('div', 'col-head');
+    const titleWrap = el('div', 'col-title');
+    const emojiBox = el('div', 'col-emoji', col.emoji);
+    const names = el('div', 'col-names');
+    names.appendChild(el('span', 'col-name', col.name));
+    names.appendChild(el('span', 'col-en', col.en));
+    titleWrap.appendChild(emojiBox);
+    titleWrap.appendChild(names);
+    head.appendChild(titleWrap);
+    head.appendChild(el('span', 'col-count', String(colTasks.length)));
+    section.appendChild(head);
+
+    const body = el('div', 'col-body');
+    if (!colTasks.length) {
+      const hint = el('div', 'empty-hint');
+      hint.appendChild(el('span', 'empty-emoji', col.emoji));
+      hint.appendChild(el('span', null, col.empty));
+      body.appendChild(hint);
+    } else {
+      colTasks.forEach((task, i) => {
+        const card = el('article', 'card');
+        card.dataset.id = task.id;
+        card.style.background = task.color || PALETTE[0];
+        if (firstRender) {
+          card.classList.add('pop');
+          card.style.animationDelay = Math.min(i * 45, 400) + 'ms';
+        }
+        if (!task.title.trim()) card.classList.add('untitled');
+        card.appendChild(el('h3', 'card-title', task.title.trim() || '（未命名任務）'));
+        if (task.content.trim()) card.appendChild(el('p', 'card-content', task.content));
+        const foot = el('div', 'card-foot');
+        foot.appendChild(el('span', 'card-date', fmtDate(task.createdAt)));
+        const actions = el('div', 'card-actions');
+        const idx = STATUS_ORDER.indexOf(task.status);
+        if (idx > 0) {
+          const left = el('button', 'move-btn', '◀');
+          left.dataset.dir = '-1';
+          left.title = '移到上一欄';
+          left.setAttribute('aria-label', '移到上一欄');
+          actions.appendChild(left);
+        }
+        if (idx < STATUS_ORDER.length - 1) {
+          const right = el('button', 'move-btn', '▶');
+          right.dataset.dir = '1';
+          right.title = '移到下一欄';
+          right.setAttribute('aria-label', '移到下一欄');
+          actions.appendChild(right);
+        }
+        foot.appendChild(actions);
+        card.appendChild(foot);
+        body.appendChild(card);
+      });
+    }
+    section.appendChild(body);
+
+    const addBtn = el('button', 'add-task', '＋ 新增任務');
+    section.appendChild(addBtn);
+    boardEl.appendChild(section);
+  });
+
+  firstRender = false;
+}
+
+function openProjectMenu() {
+  const menu = $('#projMenu');
+  const list = $('#projList');
+  list.textContent = '';
+  state.projects.forEach(p => {
+    const item = el('button', 'proj-item' + (p.id === state.currentProjectId ? ' active' : ''));
+    item.dataset.id = p.id;
+    item.appendChild(el('span', 'proj-item-name', p.name));
+    item.appendChild(el('span', 'proj-item-count', projectTasks(p.id).length + ' 項'));
+    const renameBtn = el('button', 'mini-btn', '✎');
+    renameBtn.title = '重新命名';
+    renameBtn.setAttribute('aria-label', '重新命名 ' + p.name);
+    renameBtn.dataset.act = 'rename';
+    const delBtn = el('button', 'mini-btn', '🗑');
+    delBtn.title = '刪除專案';
+    delBtn.setAttribute('aria-label', '刪除 ' + p.name);
+    delBtn.dataset.act = 'delete';
+    item.appendChild(renameBtn);
+    item.appendChild(delBtn);
+    list.appendChild(item);
+  });
+  menu.classList.remove('hidden');
+  $('#projWrap').classList.add('open');
+  $('#projBtn').setAttribute('aria-expanded', 'true');
+}
+
+function closeProjectMenu() {
+  $('#projMenu').classList.add('hidden');
+  $('#projWrap').classList.remove('open');
+  $('#projBtn').setAttribute('aria-expanded', 'false');
+}
+
+function switchProject(pid) {
+  if (!state.projects.some(p => p.id === pid)) return;
+  state.currentProjectId = pid;
+  save();
+  renderBoard();
+  closeProjectMenu();
+  boardEl.scrollLeft = 0;
+}
+
+function addProject(name) {
+  const p = { id: uid(), name: name, createdAt: Date.now() };
+  state.projects.push(p);
+  state.currentProjectId = p.id;
+  save();
+  renderBoard();
+}
+
+function renameProject(pid, name) {
+  const p = state.projects.find(x => x.id === pid);
+  if (p) { p.name = name; save(); renderBoard(); if (!$('#projMenu').classList.contains('hidden')) openProjectMenu(); }
+}
+
+function deleteProject(pid) {
+  const p = state.projects.find(x => x.id === pid);
+  if (!p) return;
+  const count = projectTasks(pid).length;
+  const msg = count
+    ? '刪除專案「' + p.name + '」？入面 ' + count + ' 個任務會一併刪除，無法復原。'
+    : '刪除專案「' + p.name + '」？';
+  if (!window.confirm(msg)) return;
+  state.projects = state.projects.filter(x => x.id !== pid);
+  state.tasks = state.tasks.filter(t => t.projectId !== pid);
+  if (!state.projects.length) {
+    const fresh = { id: uid(), name: '我的專案', createdAt: Date.now() };
+    state.projects.push(fresh);
+  }
+  if (state.currentProjectId === pid) state.currentProjectId = state.projects[0].id;
+  save();
+  renderBoard();
+  closeProjectMenu();
+}
+
+let editTaskId = null;
+let editIsNew = false;
+let editTouched = false;
+
+function getEditTask() {
+  return state.tasks.find(t => t.id === editTaskId) || null;
+}
+
+function buildPalette() {
+  const wrap = $('#palette');
+  PALETTE.forEach(c => {
+    const dot = el('button', 'palette-dot');
+    dot.dataset.color = c;
+    dot.style.background = c;
+    dot.title = c;
+    dot.setAttribute('aria-label', '顏色 ' + c);
+    wrap.appendChild(dot);
+  });
+}
+
+function buildStatusSeg() {
+  const seg = $('#statusSeg');
+  COLUMNS.forEach(col => {
+    const b = el('button', 'seg-btn');
+    b.dataset.status = col.status;
+    const dot = el('span', 'seg-dot');
+    dot.style.background = col.accent;
+    b.appendChild(dot);
+    b.appendChild(document.createTextNode(col.name));
+    seg.appendChild(b);
+  });
+}
+
+function syncTaskModal(task) {
+  $('#taskTitle').value = task.title === '新任務' && editIsNew && !editTouched ? '' : task.title;
+  $('#taskContent').value = task.content;
+  $$('#palette .palette-dot').forEach(d => d.classList.toggle('selected', d.dataset.color === task.color));
+  $$('#statusSeg .seg-btn').forEach(b => b.classList.toggle('selected', b.dataset.status === task.status));
+}
+
+function openTaskModal(taskId, isNew) {
+  const task = state.tasks.find(t => t.id === taskId);
+  if (!task) return;
+  editTaskId = taskId;
+  editIsNew = !!isNew;
+  editTouched = false;
+  $('#taskModalTag').textContent = isNew ? '新增任務' : '編輯任務';
+  syncTaskModal(task);
+  $('#taskModal').classList.remove('hidden');
+  const input = $('#taskTitle');
+  input.focus();
+  if (isNew) input.value = '';
+}
+
+function closeTaskModal() {
+  const task = getEditTask();
+  if (task && editIsNew && !editTouched) {
+    state.tasks = state.tasks.filter(t => t.id !== task.id);
+    save();
+  }
+  editTaskId = null;
+  $('#taskModal').classList.add('hidden');
+  renderBoard();
+}
+
+function markTouched() { editTouched = true; }
+
+function addTask(status) {
+  const pid = currentProject().id;
+  const color = PALETTE[projectTasks(pid).length % PALETTE.length];
+  const task = { id: uid(), projectId: pid, title: '新任務', content: '', color: color, status: status, createdAt: Date.now() };
+  state.tasks.push(task);
+  save();
+  renderBoard();
+  openTaskModal(task.id, true);
+}
+
+function moveTask(taskId, dir) {
+  const task = state.tasks.find(t => t.id === taskId);
+  if (!task) return;
+  const idx = STATUS_ORDER.indexOf(task.status);
+  const next = STATUS_ORDER[idx + dir];
+  if (!next) return;
+  task.status = next;
+  save();
+  renderBoard();
+}
+
+let drag = null;
+
+function findColumnAt(x, y) {
+  const node = document.elementFromPoint(x, y);
+  return node ? node.closest('.column') : null;
+}
+
+function setDropHot(col) {
+  $$('.column').forEach(c => c.classList.toggle('drop-hot', c === col));
+}
+
+function startDrag(x, y) {
+  if (!drag || drag.started) return;
+  drag.started = true;
+  const rect = drag.el.getBoundingClientRect();
+  const ghost = drag.el.cloneNode(true);
+  ghost.classList.add('ghost');
+  ghost.classList.remove('pop', 'drag-src');
+  ghost.style.width = rect.width + 'px';
+  ghost.style.left = (x - drag.offX) + 'px';
+  ghost.style.top = (y - drag.offY) + 'px';
+  document.body.appendChild(ghost);
+  drag.ghost = ghost;
+  drag.el.classList.add('drag-src');
+  document.body.classList.add('dragging');
+  if (navigator.vibrate) { try { navigator.vibrate(10); } catch (err) {} }
+}
+
+function onPointerMove(e) {
+  if (!drag) return;
+  const dx = e.clientX - drag.startX;
+  const dy = e.clientY - drag.startY;
+  if (!drag.started) {
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (drag.isTouch) {
+      if (dist > 12) { cancelDrag(); return; }
+    } else if (dist > 5) {
+      startDrag(e.clientX, e.clientY);
+    }
+    return;
+  }
+  e.preventDefault();
+  drag.lastX = e.clientX;
+  drag.lastY = e.clientY;
+  drag.ghost.style.left = (e.clientX - drag.offX) + 'px';
+  drag.ghost.style.top = (e.clientY - drag.offY) + 'px';
+  if (e.clientX < 70) boardEl.scrollLeft -= 14;
+  else if (e.clientX > window.innerWidth - 70) boardEl.scrollLeft += 14;
+  setDropHot(findColumnAt(e.clientX, e.clientY));
+}
+
+function cancelDrag() {
+  if (!drag) return;
+  if (drag.timer) clearTimeout(drag.timer);
+  if (drag.ghost) drag.ghost.remove();
+  if (drag.el) drag.el.classList.remove('drag-src');
+  document.body.classList.remove('dragging');
+  setDropHot(null);
+  document.removeEventListener('pointermove', onPointerMove);
+  document.removeEventListener('pointerup', onPointerUp);
+  document.removeEventListener('pointercancel', onPointerCancel);
+  drag = null;
+}
+
+function onPointerUp(e) {
+  if (!drag) return;
+  const d = drag;
+  if (d.timer) clearTimeout(d.timer);
+  document.removeEventListener('pointermove', onPointerMove);
+  document.removeEventListener('pointerup', onPointerUp);
+  document.removeEventListener('pointercancel', onPointerCancel);
+  if (d.started) {
+    const col = findColumnAt(d.lastX != null ? d.lastX : e.clientX, d.lastY != null ? d.lastY : e.clientY);
+    const task = state.tasks.find(t => t.id === d.taskId);
+    if (col && task && col.dataset.status !== task.status) {
+      task.status = col.dataset.status;
+      save();
+    }
+    if (d.ghost) d.ghost.remove();
+    if (d.el) d.el.classList.remove('drag-src');
+    document.body.classList.remove('dragging');
+    setDropHot(null);
+    suppressClick = true;
+    setTimeout(() => { suppressClick = false; }, 80);
+    renderBoard();
+  }
+  drag = null;
+}
+
+function onPointerCancel() { cancelDrag(); }
+
+boardEl.addEventListener('pointerdown', e => {
+  const card = e.target.closest('.card');
+  if (!card || e.target.closest('.move-btn')) return;
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  const rect = card.getBoundingClientRect();
+  drag = {
+    taskId: card.dataset.id,
+    el: card,
+    startX: e.clientX,
+    startY: e.clientY,
+    lastX: e.clientX,
+    lastY: e.clientY,
+    offX: e.clientX - rect.left,
+    offY: e.clientY - rect.top,
+    started: false,
+    isTouch: e.pointerType !== 'mouse',
+    ghost: null,
+    timer: null
+  };
+  if (drag.isTouch) {
+    drag.timer = setTimeout(() => { if (drag && !drag.started) startDrag(drag.lastX, drag.lastY); }, 260);
+  }
+  document.addEventListener('pointermove', onPointerMove, { passive: false });
+  document.addEventListener('pointerup', onPointerUp);
+  document.addEventListener('pointercancel', onPointerCancel);
+});
+
+document.addEventListener('touchmove', e => {
+  if (drag && drag.started) e.preventDefault();
+}, { passive: false });
+
+boardEl.addEventListener('contextmenu', e => {
+  if (e.target.closest('.card')) e.preventDefault();
+});
+
+boardEl.addEventListener('click', e => {
+  const moveBtn = e.target.closest('.move-btn');
+  if (moveBtn) {
+    const card = moveBtn.closest('.card');
+    moveTask(card.dataset.id, Number(moveBtn.dataset.dir));
+    return;
+  }
+  const addBtn = e.target.closest('.add-task');
+  if (addBtn) {
+    addTask(addBtn.closest('.column').dataset.status);
+    return;
+  }
+  if (suppressClick) return;
+  const card = e.target.closest('.card');
+  if (card) openTaskModal(card.dataset.id, false);
+});
+
+$('#projBtn').addEventListener('click', () => {
+  const menu = $('#projMenu');
+  if (menu.classList.contains('hidden')) openProjectMenu();
+  else closeProjectMenu();
+});
+
+$('#addProjBtn').addEventListener('click', () => {
+  closeProjectMenu();
+  openPrompt('新增專案', '', name => addProject(name));
+});
+
+$('#projMenuAdd').addEventListener('click', () => {
+  closeProjectMenu();
+  openPrompt('新增專案', '', name => addProject(name));
+});
+
+$('#projList').addEventListener('click', e => {
+  const item = e.target.closest('.proj-item');
+  if (!item) return;
+  const actBtn = e.target.closest('.mini-btn');
+  if (actBtn) {
+    if (actBtn.dataset.act === 'rename') {
+      const p = state.projects.find(x => x.id === item.dataset.id);
+      if (p) openPrompt('重新命名專案', p.name, name => renameProject(p.id, name));
+    } else if (actBtn.dataset.act === 'delete') {
+      deleteProject(item.dataset.id);
+    }
+    return;
+  }
+  switchProject(item.dataset.id);
+});
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#projWrap')) closeProjectMenu();
+});
+
+$('#taskTitle').addEventListener('input', e => {
+  const task = getEditTask();
+  if (!task) return;
+  task.title = e.target.value;
+  markTouched();
+  save();
+});
+
+$('#taskContent').addEventListener('input', e => {
+  const task = getEditTask();
+  if (!task) return;
+  task.content = e.target.value;
+  markTouched();
+  save();
+});
+
+$('#palette').addEventListener('click', e => {
+  const dot = e.target.closest('.palette-dot');
+  if (!dot) return;
+  const task = getEditTask();
+  if (!task) return;
+  task.color = dot.dataset.color;
+  markTouched();
+  save();
+  $$('#palette .palette-dot').forEach(d => d.classList.toggle('selected', d === dot));
+});
+
+$('#statusSeg').addEventListener('click', e => {
+  const btn = e.target.closest('.seg-btn');
+  if (!btn) return;
+  const task = getEditTask();
+  if (!task) return;
+  task.status = btn.dataset.status;
+  markTouched();
+  save();
+  $$('#statusSeg .seg-btn').forEach(b => b.classList.toggle('selected', b === btn));
+});
+
+$('#taskDelete').addEventListener('click', () => {
+  const task = getEditTask();
+  if (!task) return;
+  if (!window.confirm('刪除任務「' + (task.title.trim() || '未命名任務') + '」？')) return;
+  state.tasks = state.tasks.filter(t => t.id !== task.id);
+  save();
+  editTaskId = null;
+  $('#taskModal').classList.add('hidden');
+  renderBoard();
+});
+
+$('#taskSave').addEventListener('click', closeTaskModal);
+$('#taskClose').addEventListener('click', closeTaskModal);
+$('#taskModal').addEventListener('click', e => {
+  if (e.target === $('#taskModal')) closeTaskModal();
+});
+
+let promptCallback = null;
+
+function openPrompt(title, value, onOk) {
+  promptCallback = onOk;
+  $('#promptTitle').textContent = title;
+  const input = $('#promptInput');
+  input.value = value || '';
+  $('#promptModal').classList.remove('hidden');
+  input.focus();
+  input.select();
+}
+
+function closePrompt() {
+  promptCallback = null;
+  $('#promptModal').classList.add('hidden');
+}
+
+function submitPrompt() {
+  const name = $('#promptInput').value.trim();
+  if (!name) { $('#promptInput').focus(); return; }
+  const cb = promptCallback;
+  closePrompt();
+  if (cb) cb(name);
+}
+
+$('#promptOk').addEventListener('click', submitPrompt);
+$('#promptCancel').addEventListener('click', closePrompt);
+$('#promptClose').addEventListener('click', closePrompt);
+$('#promptInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); submitPrompt(); }
+});
+$('#promptModal').addEventListener('click', e => {
+  if (e.target === $('#promptModal')) closePrompt();
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if (!$('#promptModal').classList.contains('hidden')) { closePrompt(); return; }
+  if (!$('#taskModal').classList.contains('hidden')) { closeTaskModal(); return; }
+  closeProjectMenu();
+});
+
+buildPalette();
+buildStatusSeg();
+renderBoard();
+</script>
+</body>
+</html>
