@@ -569,7 +569,7 @@ function loadState() {
       if (d && Array.isArray(d.projects) && Array.isArray(d.tasks) && d.projects.length) return d;
     }
   } catch (err) {}
-  const p = { id: uid(), name: '我的專案', createdAt: Date.now() };
+  const p = { id: uid(), name: '我的專案', createdAt: Date.now(), updatedAt: Date.now() };
   return { currentProjectId: p.id, projects: [p], tasks: [] };
 }
 
@@ -582,12 +582,16 @@ function save() {
   scheduleCloudSave();
 }
 
+function aliveProjects() {
+  return state.projects.filter(p => !p.deleted);
+}
+
 function currentProject() {
-  return state.projects.find(p => p.id === state.currentProjectId) || state.projects[0];
+  return aliveProjects().find(p => p.id === state.currentProjectId) || aliveProjects()[0] || state.projects[0];
 }
 
 function projectTasks(pid) {
-  return state.tasks.filter(t => t.projectId === pid);
+  return state.tasks.filter(t => t.projectId === pid && !t.deleted);
 }
 
 function fmtDate(ts) {
@@ -684,7 +688,7 @@ function openProjectMenu() {
   const menu = $('#projMenu');
   const list = $('#projList');
   list.textContent = '';
-  state.projects.forEach(p => {
+  aliveProjects().forEach(p => {
     const item = el('button', 'proj-item' + (p.id === state.currentProjectId ? ' active' : ''));
     item.dataset.id = p.id;
     item.appendChild(el('span', 'proj-item-name', p.name));
@@ -713,7 +717,7 @@ function closeProjectMenu() {
 }
 
 function switchProject(pid) {
-  if (!state.projects.some(p => p.id === pid)) return;
+  if (!aliveProjects().some(p => p.id === pid)) return;
   state.currentProjectId = pid;
   save();
   renderBoard();
@@ -722,7 +726,7 @@ function switchProject(pid) {
 }
 
 function addProject(name) {
-  const p = { id: uid(), name: name, createdAt: Date.now() };
+  const p = { id: uid(), name: name, createdAt: Date.now(), updatedAt: Date.now() };
   state.projects.push(p);
   state.currentProjectId = p.id;
   save();
@@ -731,7 +735,7 @@ function addProject(name) {
 
 function renameProject(pid, name) {
   const p = state.projects.find(x => x.id === pid);
-  if (p) { p.name = name; save(); renderBoard(); if (!$('#projMenu').classList.contains('hidden')) openProjectMenu(); }
+  if (p) { p.name = name; p.updatedAt = Date.now(); save(); renderBoard(); if (!$('#projMenu').classList.contains('hidden')) openProjectMenu(); }
 }
 
 function deleteProject(pid) {
@@ -742,13 +746,20 @@ function deleteProject(pid) {
     ? '刪除專案「' + p.name + '」？入面 ' + count + ' 個任務會一併刪除，無法復原。'
     : '刪除專案「' + p.name + '」？';
   if (!window.confirm(msg)) return;
-  state.projects = state.projects.filter(x => x.id !== pid);
-  state.tasks = state.tasks.filter(t => t.projectId !== pid);
-  if (!state.projects.length) {
-    const fresh = { id: uid(), name: '我的專案', createdAt: Date.now() };
+  const now = Date.now();
+  p.deleted = true;
+  p.updatedAt = now;
+  state.tasks.forEach(t => {
+    if (t.projectId === pid && !t.deleted) {
+      t.deleted = true;
+      t.updatedAt = now;
+    }
+  });
+  if (!aliveProjects().length) {
+    const fresh = { id: uid(), name: '我的專案', createdAt: Date.now(), updatedAt: now };
     state.projects.push(fresh);
   }
-  if (state.currentProjectId === pid) state.currentProjectId = state.projects[0].id;
+  if (state.currentProjectId === pid) state.currentProjectId = aliveProjects()[0].id;
   save();
   renderBoard();
   closeProjectMenu();
@@ -811,7 +822,8 @@ function openTaskModal(taskId, isNew) {
 function closeTaskModal() {
   const task = getEditTask();
   if (task && editIsNew && !editTouched) {
-    state.tasks = state.tasks.filter(t => t.id !== task.id);
+    task.deleted = true;
+    task.updatedAt = Date.now();
     save();
   }
   editTaskId = null;
@@ -824,7 +836,7 @@ function markTouched() { editTouched = true; }
 function addTask(status) {
   const pid = currentProject().id;
   const color = PALETTE[projectTasks(pid).length % PALETTE.length];
-  const task = { id: uid(), projectId: pid, title: '新任務', content: '', color: color, status: status, createdAt: Date.now() };
+  const task = { id: uid(), projectId: pid, title: '新任務', content: '', color: color, status: status, createdAt: Date.now(), updatedAt: Date.now() };
   state.tasks.push(task);
   save();
   renderBoard();
@@ -838,6 +850,7 @@ function moveTask(taskId, dir) {
   const next = STATUS_ORDER[idx + dir];
   if (!next) return;
   task.status = next;
+  task.updatedAt = Date.now();
   save();
   renderBoard();
 }
@@ -918,6 +931,7 @@ function onPointerUp(e) {
     const task = state.tasks.find(t => t.id === d.taskId);
     if (col && task && col.dataset.status !== task.status) {
       task.status = col.dataset.status;
+      task.updatedAt = Date.now();
       save();
     }
     if (d.ghost) d.ghost.remove();
@@ -1033,16 +1047,17 @@ $('#importFile').addEventListener('change', e => {
         return;
       }
       let addedP = 0, addedT = 0;
-      d.projects.forEach(p => {
-        if (p && p.id && !state.projects.some(x => x.id === p.id)) { state.projects.push(p); addedP++; }
-      });
-      d.tasks.forEach(t => {
-        if (t && t.id && !state.tasks.some(x => x.id === t.id)) { state.tasks.push(t); addedT++; }
-      });
-      if (!state.projects.some(p => p.id === state.currentProjectId)) state.currentProjectId = state.projects[0].id;
+      const beforeP = state.projects.length, beforeT = state.tasks.length;
+      state = mergeStates(state, d);
+      addedP = state.projects.length - beforeP;
+      addedT = state.tasks.length - beforeT;
+      if (!aliveProjects().length) {
+        state.projects.push({ id: uid(), name: '我的專案', createdAt: Date.now(), updatedAt: Date.now() });
+      }
+      if (!aliveProjects().some(p => p.id === state.currentProjectId)) state.currentProjectId = aliveProjects()[0].id;
       save();
       renderBoard();
-      alert('已匯入 ' + addedP + ' 個專案、' + addedT + ' 個任務。');
+      alert('已匯入，新增 ' + addedP + ' 個專案、' + addedT + ' 個任務（重複項目以較新版本為準）。');
     } catch (err) {
       alert('讀取檔案失敗：' + err.message);
     }
@@ -1074,6 +1089,7 @@ $('#taskTitle').addEventListener('input', e => {
   const task = getEditTask();
   if (!task) return;
   task.title = e.target.value;
+  task.updatedAt = Date.now();
   markTouched();
   save();
 });
@@ -1082,6 +1098,7 @@ $('#taskContent').addEventListener('input', e => {
   const task = getEditTask();
   if (!task) return;
   task.content = e.target.value;
+  task.updatedAt = Date.now();
   markTouched();
   save();
 });
@@ -1092,6 +1109,7 @@ $('#palette').addEventListener('click', e => {
   const task = getEditTask();
   if (!task) return;
   task.color = dot.dataset.color;
+  task.updatedAt = Date.now();
   markTouched();
   save();
   $$('#palette .palette-dot').forEach(d => d.classList.toggle('selected', d === dot));
@@ -1103,6 +1121,7 @@ $('#statusSeg').addEventListener('click', e => {
   const task = getEditTask();
   if (!task) return;
   task.status = btn.dataset.status;
+  task.updatedAt = Date.now();
   markTouched();
   save();
   $$('#statusSeg .seg-btn').forEach(b => b.classList.toggle('selected', b === btn));
@@ -1112,7 +1131,8 @@ $('#taskDelete').addEventListener('click', () => {
   const task = getEditTask();
   if (!task) return;
   if (!window.confirm('刪除任務「' + (task.title.trim() || '未命名任務') + '」？')) return;
-  state.tasks = state.tasks.filter(t => t.id !== task.id);
+  task.deleted = true;
+  task.updatedAt = Date.now();
   save();
   editTaskId = null;
   $('#taskModal').classList.add('hidden');
@@ -1356,51 +1376,84 @@ async function usePickerFolder() {
   await initDriveFile();
 }
 
+function pickNewer(a, b) {
+  return (b.updatedAt || 0) > (a.updatedAt || 0) ? b : a;
+}
+
+function mergeStates(local, cloud) {
+  const pMap = {};
+  (cloud.projects || []).forEach(p => { if (p && p.id) pMap[p.id] = p; });
+  (local.projects || []).forEach(p => {
+    if (!p || !p.id) return;
+    pMap[p.id] = pMap[p.id] ? pickNewer(pMap[p.id], p) : p;
+  });
+  const tMap = {};
+  (cloud.tasks || []).forEach(t => { if (t && t.id) tMap[t.id] = t; });
+  (local.tasks || []).forEach(t => {
+    if (!t || !t.id) return;
+    tMap[t.id] = tMap[t.id] ? pickNewer(tMap[t.id], t) : t;
+  });
+  const projects = Object.values(pMap);
+  const tasks = Object.values(tMap);
+  const alive = projects.filter(p => !p.deleted);
+  let cur = local.currentProjectId;
+  if (!alive.some(p => p.id === cur)) {
+    cur = alive.some(p => p.id === cloud.currentProjectId) ? cloud.currentProjectId : (alive[0] ? alive[0].id : cur);
+  }
+  return { currentProjectId: cur, projects: projects, tasks: tasks };
+}
+
+function compactState(d) {
+  const cutoff = Date.now() - 30 * 86400000;
+  d.projects = d.projects.filter(p => !p.deleted || (p.updatedAt || 0) >= cutoff);
+  d.tasks = d.tasks.filter(t => !t.deleted || (t.updatedAt || 0) >= cutoff);
+  return d;
+}
+
+async function syncWithCloud() {
+  let cloudData = null;
+  if (driveCfg.fileId) {
+    try {
+      const raw = await driveFetch('https://www.googleapis.com/drive/v3/files/' + driveCfg.fileId + '?alt=media&supportsAllDrives=true');
+      const d = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (d && Array.isArray(d.projects) && Array.isArray(d.tasks)) cloudData = d;
+    } catch (err) {
+      if (err.message === 'UNAUTHORIZED') throw err;
+      if (err.message === 'NOT_FOUND') driveCfg.fileId = null;
+    }
+  }
+  const before = JSON.stringify(state);
+  const merged = compactState(cloudData ? mergeStates(state, cloudData) : state);
+  if (JSON.stringify(merged) !== before) {
+    state = merged;
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (err) {}
+    renderBoard();
+  }
+  if (!driveCfg.fileId) {
+    const meta = await driveFetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: DRIVE_FILE_NAME, mimeType: 'application/json', parents: [driveCfg.folderId] })
+    });
+    driveCfg.fileId = meta.id;
+  }
+  await driveFetch('https://www.googleapis.com/upload/drive/v3/files/' + driveCfg.fileId + '?uploadType=media&supportsAllDrives=true', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(merged)
+  });
+}
+
 async function initDriveFile() {
   setDriveStatus('saving');
   try {
     const q = encodeURIComponent("'" + driveCfg.folderId + "' in parents and name = '" + DRIVE_FILE_NAME + "' and trashed = false");
     const res = await driveFetch('https://www.googleapis.com/drive/v3/files?q=' + q + '&fields=files(id)&pageSize=5&supportsAllDrives=true&includeItemsFromAllDrives=true');
     const files = (res && res.files) || [];
-    let loadedCloud = false;
-    if (files.length) {
-      driveCfg.fileId = files[0].id;
-      let cloudData = null;
-      try {
-        const raw = await driveFetch('https://www.googleapis.com/drive/v3/files/' + files[0].id + '?alt=media&supportsAllDrives=true');
-        const d = typeof raw === 'string' ? JSON.parse(raw) : raw;
-        if (d && Array.isArray(d.projects) && Array.isArray(d.tasks) && d.projects.length) cloudData = d;
-      } catch (err) {
-        if (err.message === 'UNAUTHORIZED') throw err;
-      }
-      if (cloudData) {
-        const same = JSON.stringify(cloudData) === JSON.stringify(state);
-        const cloudHas = cloudData.tasks.length > 0;
-        const localHas = state.tasks.length > 0;
-        if (!same && cloudHas && localHas) {
-          if (window.confirm('雲端同本機都有任務資料，用邊個版本？\n\n「確定」＝用雲端版本（覆蓋本機）\n「取消」＝用本機版本（上傳覆蓋雲端）')) {
-            state = cloudData;
-            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (err) {}
-            loadedCloud = true;
-          } else {
-            await uploadFullState(false);
-          }
-        } else if (!same && localHas && !cloudHas) {
-          await uploadFullState(false);
-        } else {
-          state = cloudData;
-          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (err) {}
-          loadedCloud = true;
-        }
-      } else {
-        await uploadFullState(false);
-      }
-    } else {
-      await uploadFullState(true);
-    }
+    driveCfg.fileId = files.length ? files[0].id : null;
+    await syncWithCloud();
     driveCfg.lastSync = Date.now();
     persistDriveCfg();
-    if (loadedCloud) { firstRender = true; renderBoard(); }
     setDriveStatus('synced');
     closeDriveModal();
   } catch (err) {
@@ -1408,34 +1461,6 @@ async function initDriveFile() {
     setDriveStatus('error');
     alert('Google Drive 設定失敗：' + err.message);
   }
-}
-
-async function uploadFullState(create) {
-  const body = JSON.stringify(state);
-  if (!create && driveCfg && driveCfg.fileId) {
-    try {
-      await driveFetch('https://www.googleapis.com/upload/drive/v3/files/' + driveCfg.fileId + '?uploadType=media&supportsAllDrives=true', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: body
-      });
-      return;
-    } catch (err) {
-      if (err.message === 'UNAUTHORIZED') throw err;
-      driveCfg.fileId = null;
-    }
-  }
-  const meta = await driveFetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: DRIVE_FILE_NAME, mimeType: 'application/json', parents: [driveCfg.folderId] })
-  });
-  driveCfg.fileId = meta.id;
-  await driveFetch('https://www.googleapis.com/upload/drive/v3/files/' + meta.id + '?uploadType=media&supportsAllDrives=true', {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: body
-  });
 }
 
 function scheduleCloudSave() {
@@ -1451,7 +1476,7 @@ async function cloudSave() {
   cloudSaving = true;
   setDriveStatus('saving');
   try {
-    await uploadFullState(false);
+    await syncWithCloud();
     driveCfg.lastSync = Date.now();
     persistDriveCfg();
     setDriveStatus('synced');
