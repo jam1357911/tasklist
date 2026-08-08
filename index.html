@@ -1308,18 +1308,36 @@ async function initDriveFile() {
     let loadedCloud = false;
     if (files.length) {
       driveCfg.fileId = files[0].id;
+      let cloudData = null;
       try {
         const raw = await driveFetch('https://www.googleapis.com/drive/v3/files/' + files[0].id + '?alt=media&supportsAllDrives=true');
         const d = typeof raw === 'string' ? JSON.parse(raw) : raw;
-        if (d && Array.isArray(d.projects) && Array.isArray(d.tasks) && d.projects.length) {
-          state = d;
-          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (err) {}
-          loadedCloud = true;
-        }
+        if (d && Array.isArray(d.projects) && Array.isArray(d.tasks) && d.projects.length) cloudData = d;
       } catch (err) {
         if (err.message === 'UNAUTHORIZED') throw err;
       }
-      if (!loadedCloud) await uploadFullState(false);
+      if (cloudData) {
+        const same = JSON.stringify(cloudData) === JSON.stringify(state);
+        const cloudHas = cloudData.tasks.length > 0;
+        const localHas = state.tasks.length > 0;
+        if (!same && cloudHas && localHas) {
+          if (window.confirm('雲端同本機都有任務資料，用邊個版本？\n\n「確定」＝用雲端版本（覆蓋本機）\n「取消」＝用本機版本（上傳覆蓋雲端）')) {
+            state = cloudData;
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (err) {}
+            loadedCloud = true;
+          } else {
+            await uploadFullState(false);
+          }
+        } else if (!same && localHas && !cloudHas) {
+          await uploadFullState(false);
+        } else {
+          state = cloudData;
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (err) {}
+          loadedCloud = true;
+        }
+      } else {
+        await uploadFullState(false);
+      }
     } else {
       await uploadFullState(true);
     }
