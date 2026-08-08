@@ -156,6 +156,9 @@ input,textarea{font-family:inherit;color:inherit;}
   transition:background .1s ease;
 }
 .proj-menu-add:hover{background:var(--green);}
+.proj-menu-backup{display:flex;border-top:1px solid rgba(25,22,19,.08);}
+.proj-menu-backup .proj-menu-add{flex:1;justify-content:center;}
+.proj-menu-backup .proj-menu-add:first-child{border-right:1px solid rgba(25,22,19,.08);}
 .proj-menu-note{
   padding:9px 14px;font-size:11px;opacity:.68;
   background:var(--shade);
@@ -437,6 +440,10 @@ textarea.input{resize:vertical;min-height:92px;line-height:1.55;}
       <div class="proj-menu-head">切換專案</div>
       <div class="proj-list" id="projList"></div>
       <button class="proj-menu-add" id="projMenuAdd">＋ 新增專案</button>
+      <div class="proj-menu-backup">
+        <button class="proj-menu-add" id="exportBtn">⬇ 匯出備份</button>
+        <button class="proj-menu-add" id="importBtn">⬆ 匯入備份</button>
+      </div>
       <div class="proj-menu-note">🔒 本機自動儲存；可透過右上角 ☁ 連接 Google Drive 同步</div>
     </div>
   </div>
@@ -445,6 +452,7 @@ textarea.input{resize:vertical;min-height:92px;line-height:1.55;}
     <span class="drive-btn-label" id="driveBtnLabel">連接 Drive</span>
   </button>
 </header>
+<input type="file" id="importFile" accept=".json,application/json" class="hidden">
 
 <main class="board" id="board"></main>
 
@@ -991,6 +999,55 @@ $('#addProjBtn').addEventListener('click', () => {
 $('#projMenuAdd').addEventListener('click', () => {
   closeProjectMenu();
   openPrompt('新增專案', '', name => addProject(name));
+});
+
+$('#exportBtn').addEventListener('click', () => {
+  closeProjectMenu();
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const d = new Date();
+  a.href = url;
+  a.download = 'tasklist-backup-' + d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0') + '.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+});
+
+$('#importBtn').addEventListener('click', () => {
+  closeProjectMenu();
+  $('#importFile').click();
+});
+
+$('#importFile').addEventListener('change', e => {
+  const f = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const d = JSON.parse(String(reader.result));
+      if (!d || !Array.isArray(d.projects) || !Array.isArray(d.tasks) || !d.projects.length) {
+        alert('備份檔案格式唔正確。');
+        return;
+      }
+      let addedP = 0, addedT = 0;
+      d.projects.forEach(p => {
+        if (p && p.id && !state.projects.some(x => x.id === p.id)) { state.projects.push(p); addedP++; }
+      });
+      d.tasks.forEach(t => {
+        if (t && t.id && !state.tasks.some(x => x.id === t.id)) { state.tasks.push(t); addedT++; }
+      });
+      if (!state.projects.some(p => p.id === state.currentProjectId)) state.currentProjectId = state.projects[0].id;
+      save();
+      renderBoard();
+      alert('已匯入 ' + addedP + ' 個專案、' + addedT + ' 個任務。');
+    } catch (err) {
+      alert('讀取檔案失敗：' + err.message);
+    }
+  };
+  reader.readAsText(f);
 });
 
 $('#projList').addEventListener('click', e => {
