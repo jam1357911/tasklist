@@ -4,12 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#191613">
-<meta name="description" content="Tasklist 任務看板 — 無需登入、資料存於本機嘅看板工具。未完成／工作中／已完成，多專案切換，手機電腦通用。">
+<meta name="description" content="Tasklist 任務看板 — 資料存於本機，可連接 Google Drive 同步嘅看板工具。未完成／工作中／已完成，多專案切換，手機電腦通用。">
 <title>Tasklist 任務看板</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect x='4' y='4' width='92' height='92' rx='20' fill='%23FFD449' stroke='%23191613' stroke-width='8'/%3E%3Cpath d='M30 52 L45 67 L72 36' stroke='%23191613' stroke-width='10' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500&family=Jost:wght@300;400;500&family=Noto+Sans+TC:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
 :root{
   --ink:#191613;
@@ -327,6 +328,59 @@ textarea.input{resize:vertical;min-height:92px;line-height:1.55;}
 .prompt-panel{width:min(420px,94vw);}
 .prompt-panel .input{margin-top:4px;}
 
+.drive-btn{
+  display:inline-flex;align-items:center;gap:8px;flex:none;
+  border:none;border-radius:10px;
+  padding:9px 14px;font-size:13.5px;line-height:1;min-height:42px;
+  background:rgba(246,238,223,.14);color:var(--paper);
+  transition:all .12s ease;
+  max-width:min(38vw,240px);
+}
+.drive-btn:hover{background:var(--paper);color:var(--ink);transform:translateY(-1px);}
+.drive-btn:active{transform:translateY(1px);}
+.drive-btn-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.drive-btn.st-synced{background:var(--yellow);color:var(--ink);}
+.drive-btn.st-need{background:var(--blue);color:var(--ink);}
+.drive-btn.st-error{background:var(--red);color:#fff;}
+.drive-btn.st-busy{opacity:.75;}
+
+.drive-note{font-size:13.5px;line-height:1.65;opacity:.85;margin:4px 0 10px;}
+.drive-note-dim{opacity:.55;font-size:12px;}
+.drive-steps{margin:0 0 12px 18px;font-size:13.5px;line-height:1.7;display:flex;flex-direction:column;gap:6px;}
+.drive-big-btn{width:100%;margin:6px 0;min-height:50px;font-size:15px;}
+.drive-crumbs{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:2px 0 10px;}
+.crumb-btn{
+  max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  padding:5px 10px;border:none;border-radius:8px;
+  background:rgba(25,22,19,.07);font-size:13px;
+  transition:background .1s ease;
+}
+.crumb-btn:hover{background:var(--yellow);}
+.crumb-sep{opacity:.4;font-size:12px;}
+.folder-list{
+  display:flex;flex-direction:column;gap:4px;
+  max-height:34vh;overflow-y:auto;
+  background:rgba(25,22,19,.05);border-radius:12px;padding:8px;
+}
+.folder-item{
+  display:flex;align-items:center;gap:10px;width:100%;
+  padding:10px 12px;text-align:left;font-size:14px;
+  border:none;border-radius:10px;background:transparent;
+  transition:background .1s ease,box-shadow .1s ease;
+}
+.folder-item:hover{background:var(--white);box-shadow:var(--shadow);}
+.folder-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.folder-go{opacity:.4;}
+.picker-loading,.picker-empty{padding:18px 12px;text-align:center;font-size:13px;opacity:.6;}
+.drive-panel-row{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:10px 2px;border-bottom:1px solid rgba(25,22,19,.08);
+}
+.drive-panel-key{font-family:var(--font-display);font-size:10px;font-weight:400;letter-spacing:.2em;opacity:.6;}
+.drive-panel-val{font-size:14px;font-weight:500;max-width:62%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;}
+.drive-panel-btns{display:flex;flex-direction:column;gap:8px;margin-top:16px;}
+.drive-panel-btns .btn{width:100%;}
+
 @media (max-width:768px){
   :root{--topbar-h:58px;}
   .topbar{padding:0 12px;}
@@ -354,6 +408,10 @@ textarea.input{resize:vertical;min-height:92px;line-height:1.55;}
   .modal-foot{flex-wrap:wrap;}
   .modal-foot .btn{flex:1;}
 }
+@media (max-width:520px){
+  .drive-btn .drive-btn-label{display:none;}
+  .drive-btn{padding:9px 12px;}
+}
 @media (max-width:400px){
   .proj-btn .proj-label{max-width:30vw;}
 }
@@ -379,9 +437,13 @@ textarea.input{resize:vertical;min-height:92px;line-height:1.55;}
       <div class="proj-menu-head">切換專案</div>
       <div class="proj-list" id="projList"></div>
       <button class="proj-menu-add" id="projMenuAdd">＋ 新增專案</button>
-      <div class="proj-menu-note">🔒 資料只儲存在此瀏覽器本機，無需登入</div>
+      <div class="proj-menu-note">🔒 本機自動儲存；可透過右上角 ☁ 連接 Google Drive 同步</div>
     </div>
   </div>
+  <button class="drive-btn" id="driveBtn" title="Google Drive 同步設定" aria-label="Google Drive 同步設定">
+    <span aria-hidden="true">☁</span>
+    <span class="drive-btn-label" id="driveBtnLabel">連接 Drive</span>
+  </button>
 </header>
 
 <main class="board" id="board"></main>
@@ -413,11 +475,52 @@ textarea.input{resize:vertical;min-height:92px;line-height:1.55;}
       <span class="modal-tag" id="promptTitle">新增專案</span>
       <button class="icon-x" id="promptClose" aria-label="關閉">✕</button>
     </div>
-    <label class="field-label" for="promptInput">專案名稱</label>
+    <label class="field-label" id="promptLabel" for="promptInput">專案名稱</label>
     <input class="input title-input" id="promptInput" maxlength="30" placeholder="例如：工作、讀書、生活…" autocomplete="off">
     <div class="modal-foot">
       <button class="btn btn-ghost" id="promptCancel">取消</button>
       <button class="btn btn-ink" id="promptOk">確定</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop hidden" id="driveModal">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Google Drive 同步">
+    <div class="modal-head">
+      <span class="modal-tag">GOOGLE DRIVE</span>
+      <button class="icon-x" id="driveClose" aria-label="關閉">✕</button>
+    </div>
+
+    <div id="driveViewSetup" class="hidden">
+      <p class="drive-note"><b>首次設定（只需一次）：</b>本頁需要一個 Google Cloud OAuth 用戶端 ID，先至可以登入 Google Drive。</p>
+      <ol class="drive-steps">
+        <li>到 <b>console.cloud.google.com</b> 建立或選擇一個專案。</li>
+        <li>喺「API 和服務 → 資料庫」啟用 <b>Google Drive API</b>。</li>
+        <li>喺「OAuth 同意畫面」完成基本設定，並把自己加入測試用戶。</li>
+        <li>喺「憑證」建立 <b>OAuth 用戶端 ID</b>（類型：網路應用程式），並喺「已授權的 JavaScript 來源」加入本網頁嘅來源網址（例如 http://localhost:5500；如放上 GitHub Pages 就填 https://你嘅用戶名.github.io，只填到域名，唔使加路徑）。</li>
+        <li>把用戶端 ID 貼入 index.html 內 JavaScript 頂部嘅 <b>GOOGLE_CLIENT_ID</b>，然後重新載入網頁。</li>
+      </ol>
+      <p class="drive-note drive-note-dim">注意：Google 登入唔支援以 file:// 直接開檔；建議放上 GitHub Pages（自帶 https），電腦同手機瀏覽器都可以正常登入同步。同一個用戶端 ID 可同時加入多個來源網址。</p>
+    </div>
+
+    <div id="driveViewConnect" class="hidden">
+      <p class="drive-note">登入 Google 帳戶之後，揀選 Google Drive 上面嘅資料夾儲存 Tasklist 資料。本機仍會保留一份副本，離線都可以照用。</p>
+      <button class="btn btn-ink drive-big-btn" id="driveLoginBtn">🔑 登入 Google Drive</button>
+      <p class="drive-note drive-note-dim">如果本機瀏覽器已登入 Google，彈出視窗會直接列出可選帳戶，撳一下就完成。</p>
+    </div>
+
+    <div id="driveViewPicker" class="hidden">
+      <p class="drive-note">揀選用邊個資料夾儲存 Tasklist 資料（撳入資料夾可以入去睇）：</p>
+      <div class="drive-crumbs" id="driveCrumbs"></div>
+      <div class="folder-list" id="driveFolderList"></div>
+      <div class="modal-foot">
+        <button class="btn" id="driveNewFolder">＋ 新增資料夾</button>
+        <button class="btn btn-ink" id="driveUseFolder">✔ 使用此資料夾</button>
+      </div>
+    </div>
+
+    <div id="driveViewPanel" class="hidden">
+      <div id="drivePanelBody"></div>
     </div>
   </div>
 </div>
@@ -427,6 +530,11 @@ textarea.input{resize:vertical;min-height:92px;line-height:1.55;}
 <script>
 'use strict';
 const STORAGE_KEY = 'tasklist-board-v1';
+const GOOGLE_CLIENT_ID = '1042374549005-lsbt53f3lj38ule0gr6mh1mccvc98ipu.apps.googleusercontent.com';
+const DRIVE_FILE_NAME = 'tasklist-data.json';
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive';
+const DRIVE_CFG_KEY = 'tasklist-drive-cfg-v1';
+const DRIVE_DISMISS_KEY = 'tasklist-drive-dismissed-v1';
 const PALETTE = ['#FFD449', '#FF9AA2', '#7FD8A4', '#7EC8FF', '#C9A7FF', '#FFAE5C', '#FF6B6B', '#FFFFFF'];
 const STATUS_ORDER = ['todo', 'doing', 'done'];
 const COLUMNS = [
@@ -463,6 +571,7 @@ let suppressClick = false;
 
 function save() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (err) {}
+  scheduleCloudSave();
 }
 
 function currentProject() {
@@ -961,9 +1070,10 @@ $('#taskModal').addEventListener('click', e => {
 
 let promptCallback = null;
 
-function openPrompt(title, value, onOk) {
+function openPrompt(title, value, onOk, label) {
   promptCallback = onOk;
   $('#promptTitle').textContent = title;
+  $('#promptLabel').textContent = label || '專案名稱';
   const input = $('#promptInput');
   input.value = value || '';
   $('#promptModal').classList.remove('hidden');
@@ -994,16 +1104,403 @@ $('#promptModal').addEventListener('click', e => {
   if (e.target === $('#promptModal')) closePrompt();
 });
 
+let driveCfg = null;
+try { driveCfg = JSON.parse(localStorage.getItem(DRIVE_CFG_KEY)) || null; } catch (err) { driveCfg = null; }
+let driveToken = driveCfg && driveCfg.token && driveCfg.tokenExpiry > Date.now() + 90000 ? driveCfg.token : null;
+let driveStatus = driveCfg && driveCfg.folderId ? (driveToken ? 'synced' : 'need-login') : 'off';
+let pickerStack = [];
+let pickerBusy = false;
+let cloudSaveTimer = null;
+let cloudSaving = false;
+let cloudDirty = false;
+
+function persistDriveCfg() {
+  try {
+    if (driveCfg) localStorage.setItem(DRIVE_CFG_KEY, JSON.stringify(driveCfg));
+    else localStorage.removeItem(DRIVE_CFG_KEY);
+  } catch (err) {}
+}
+
+function setDriveStatus(s) {
+  driveStatus = s;
+  updateDriveBtn();
+}
+
+function updateDriveBtn() {
+  const btn = $('#driveBtn');
+  const label = $('#driveBtnLabel');
+  if (!btn || !label) return;
+  btn.classList.remove('st-synced', 'st-error', 'st-busy', 'st-need');
+  let text = '連接 Drive';
+  if (driveStatus === 'connecting') { text = '連接中…'; btn.classList.add('st-busy'); }
+  else if (driveStatus === 'saving') { text = '同步中…'; btn.classList.add('st-busy'); }
+  else if (driveStatus === 'synced') { text = (driveCfg && driveCfg.folderName) ? driveCfg.folderName : '已連接'; btn.classList.add('st-synced'); }
+  else if (driveStatus === 'need-login') { text = '撳此同步'; btn.classList.add('st-need'); }
+  else if (driveStatus === 'error') { text = '同步失敗'; btn.classList.add('st-error'); }
+  label.textContent = text;
+}
+
+function requestDriveToken(prompt) {
+  return new Promise((resolve, reject) => {
+    if (!GOOGLE_CLIENT_ID) { reject(new Error('NO_CLIENT_ID')); return; }
+    if (!window.google || !google.accounts || !google.accounts.oauth2) { reject(new Error('GIS_NOT_READY')); return; }
+    const client = google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: DRIVE_SCOPE,
+      callback: resp => {
+        if (!resp || resp.error) { reject(new Error('AUTH_' + (resp && resp.error ? resp.error : 'FAILED'))); return; }
+        resolve({ token: resp.access_token, expiresIn: Number(resp.expires_in) || 3600 });
+      },
+      error_callback: err => {
+        reject(new Error(err && err.type === 'popup_skipped' ? 'POPUP_BLOCKED' : 'AUTH_CLOSED'));
+      }
+    });
+    client.requestAccessToken({ prompt: prompt || 'select_account' });
+  });
+}
+
+async function driveFetch(url, opts) {
+  opts = opts || {};
+  const res = await fetch(url, Object.assign({}, opts, {
+    headers: Object.assign({ 'Authorization': 'Bearer ' + driveToken }, opts.headers || {})
+  }));
+  if (res.status === 401) throw new Error('UNAUTHORIZED');
+  if (res.status === 404) throw new Error('NOT_FOUND');
+  if (!res.ok) throw new Error('DRIVE_HTTP_' + res.status);
+  if (res.status === 204) return null;
+  const ct = res.headers.get('content-type') || '';
+  return ct.indexOf('json') >= 0 ? res.json() : res.text();
+}
+
+async function connectDrive(prompt) {
+  if (!GOOGLE_CLIENT_ID) { showDriveView('setup'); return false; }
+  setDriveStatus('connecting');
+  try {
+    const t = await requestDriveToken(prompt || 'select_account');
+    const prevEmail = driveCfg && driveCfg.accountEmail;
+    driveToken = t.token;
+    driveCfg = driveCfg || {};
+    driveCfg.token = t.token;
+    driveCfg.tokenExpiry = Date.now() + Math.max((t.expiresIn - 120), 60) * 1000;
+    try {
+      const info = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { 'Authorization': 'Bearer ' + driveToken }
+      }).then(r => r.json());
+      if (info && info.email) { driveCfg.accountEmail = info.email; driveCfg.accountName = info.name || info.email; }
+    } catch (err) {}
+    if (prevEmail && driveCfg.accountEmail && prevEmail !== driveCfg.accountEmail) {
+      driveCfg.folderId = null;
+      driveCfg.folderName = null;
+      driveCfg.fileId = null;
+    }
+    persistDriveCfg();
+    setDriveStatus(driveCfg.folderId ? 'synced' : 'off');
+    return true;
+  } catch (err) {
+    setDriveStatus(driveCfg && driveCfg.folderId ? 'need-login' : 'off');
+    if (err.message === 'POPUP_BLOCKED') alert('瀏覽器封鎖咗 Google 登入彈出視窗，請喺瀏覽器設定允許彈出視窗，然後再試一次。');
+    else if (err.message === 'GIS_NOT_READY') alert('Google 登入服務未準備好，請稍候再試（需要網絡連線）。');
+    return false;
+  }
+}
+
+function handleDriveUnauthorized() {
+  driveToken = null;
+  if (driveCfg) { driveCfg.token = null; driveCfg.tokenExpiry = 0; persistDriveCfg(); }
+  setDriveStatus('need-login');
+  showDriveView(driveCfg && driveCfg.folderId ? 'panel' : 'connect');
+}
+
+function showDriveView(name) {
+  $('#driveViewSetup').classList.toggle('hidden', name !== 'setup');
+  $('#driveViewConnect').classList.toggle('hidden', name !== 'connect');
+  $('#driveViewPicker').classList.toggle('hidden', name !== 'picker');
+  $('#driveViewPanel').classList.toggle('hidden', name !== 'panel');
+  if (name === 'panel') renderDrivePanel();
+}
+
+function openDriveModal() {
+  if (!GOOGLE_CLIENT_ID) showDriveView('setup');
+  else if (!driveCfg || !driveCfg.folderId) {
+    if (driveToken) openFolderPicker();
+    else showDriveView('connect');
+  } else showDriveView('panel');
+  $('#driveModal').classList.remove('hidden');
+}
+
+function closeDriveModal() {
+  $('#driveModal').classList.add('hidden');
+  if (!driveCfg || !driveCfg.folderId) {
+    try { localStorage.setItem(DRIVE_DISMISS_KEY, '1'); } catch (err) {}
+  }
+}
+
+function openFolderPicker() {
+  pickerStack = [{ id: 'root', name: '我的雲端硬碟' }];
+  showDriveView('picker');
+  renderPicker();
+}
+
+async function renderPicker() {
+  const cur = pickerStack[pickerStack.length - 1];
+  const crumb = $('#driveCrumbs');
+  crumb.textContent = '';
+  pickerStack.forEach((f, i) => {
+    if (i) crumb.appendChild(el('span', 'crumb-sep', '›'));
+    const b = el('button', 'crumb-btn', f.name);
+    b.title = f.name;
+    b.addEventListener('click', () => {
+      if (pickerBusy) return;
+      pickerStack = pickerStack.slice(0, i + 1);
+      renderPicker();
+    });
+    crumb.appendChild(b);
+  });
+  if (pickerBusy) return;
+  pickerBusy = true;
+  const list = $('#driveFolderList');
+  list.textContent = '';
+  list.appendChild(el('div', 'picker-loading', '載入中…'));
+  try {
+    const q = encodeURIComponent("'" + cur.id + "' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false");
+    const res = await driveFetch('https://www.googleapis.com/drive/v3/files?q=' + q + '&fields=files(id,name)&orderBy=name&pageSize=100&supportsAllDrives=true&includeItemsFromAllDrives=true');
+    list.textContent = '';
+    const folders = (res && res.files) || [];
+    if (!folders.length) list.appendChild(el('div', 'picker-empty', '呢度冇其他資料夾，可以直接撳「✔ 使用此資料夾」'));
+    folders.forEach(f => {
+      const item = el('button', 'folder-item');
+      item.appendChild(el('span', null, '📁'));
+      item.appendChild(el('span', 'folder-name', f.name));
+      item.appendChild(el('span', 'folder-go', '›'));
+      item.addEventListener('click', () => {
+        pickerStack.push({ id: f.id, name: f.name });
+        renderPicker();
+      });
+      list.appendChild(item);
+    });
+  } catch (err) {
+    list.textContent = '';
+    pickerBusy = false;
+    if (err.message === 'UNAUTHORIZED') { handleDriveUnauthorized(); return; }
+    list.appendChild(el('div', 'picker-empty', '載入資料夾失敗：' + err.message));
+    return;
+  }
+  pickerBusy = false;
+}
+
+async function usePickerFolder() {
+  if (!driveToken || pickerBusy) return;
+  const cur = pickerStack[pickerStack.length - 1];
+  driveCfg = driveCfg || {};
+  driveCfg.folderId = cur.id;
+  driveCfg.folderName = cur.name;
+  driveCfg.fileId = null;
+  persistDriveCfg();
+  await initDriveFile();
+}
+
+async function initDriveFile() {
+  setDriveStatus('saving');
+  try {
+    const q = encodeURIComponent("'" + driveCfg.folderId + "' in parents and name = '" + DRIVE_FILE_NAME + "' and trashed = false");
+    const res = await driveFetch('https://www.googleapis.com/drive/v3/files?q=' + q + '&fields=files(id)&pageSize=5&supportsAllDrives=true&includeItemsFromAllDrives=true');
+    const files = (res && res.files) || [];
+    let loadedCloud = false;
+    if (files.length) {
+      driveCfg.fileId = files[0].id;
+      try {
+        const raw = await driveFetch('https://www.googleapis.com/drive/v3/files/' + files[0].id + '?alt=media&supportsAllDrives=true');
+        const d = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (d && Array.isArray(d.projects) && Array.isArray(d.tasks) && d.projects.length) {
+          state = d;
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (err) {}
+          loadedCloud = true;
+        }
+      } catch (err) {
+        if (err.message === 'UNAUTHORIZED') throw err;
+      }
+      if (!loadedCloud) await uploadFullState(false);
+    } else {
+      await uploadFullState(true);
+    }
+    driveCfg.lastSync = Date.now();
+    persistDriveCfg();
+    if (loadedCloud) { firstRender = true; renderBoard(); }
+    setDriveStatus('synced');
+    closeDriveModal();
+  } catch (err) {
+    if (err.message === 'UNAUTHORIZED') { handleDriveUnauthorized(); return; }
+    setDriveStatus('error');
+    alert('Google Drive 設定失敗：' + err.message);
+  }
+}
+
+async function uploadFullState(create) {
+  const body = JSON.stringify(state);
+  if (!create && driveCfg && driveCfg.fileId) {
+    try {
+      await driveFetch('https://www.googleapis.com/upload/drive/v3/files/' + driveCfg.fileId + '?uploadType=media&supportsAllDrives=true', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: body
+      });
+      return;
+    } catch (err) {
+      if (err.message === 'UNAUTHORIZED') throw err;
+      driveCfg.fileId = null;
+    }
+  }
+  const meta = await driveFetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: DRIVE_FILE_NAME, mimeType: 'application/json', parents: [driveCfg.folderId] })
+  });
+  driveCfg.fileId = meta.id;
+  await driveFetch('https://www.googleapis.com/upload/drive/v3/files/' + meta.id + '?uploadType=media&supportsAllDrives=true', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: body
+  });
+}
+
+function scheduleCloudSave() {
+  if (!driveCfg || !driveCfg.folderId || !driveToken) return;
+  clearTimeout(cloudSaveTimer);
+  cloudSaveTimer = setTimeout(() => cloudSave(), 1200);
+}
+
+async function cloudSave() {
+  if (!driveCfg || !driveCfg.folderId) return;
+  if (!driveToken || Date.now() >= (driveCfg.tokenExpiry || 0)) { setDriveStatus('need-login'); return; }
+  if (cloudSaving) { cloudDirty = true; return; }
+  cloudSaving = true;
+  setDriveStatus('saving');
+  try {
+    await uploadFullState(false);
+    driveCfg.lastSync = Date.now();
+    persistDriveCfg();
+    setDriveStatus('synced');
+  } catch (err) {
+    if (err.message === 'UNAUTHORIZED') { driveToken = null; setDriveStatus('need-login'); }
+    else setDriveStatus('error');
+  }
+  cloudSaving = false;
+  if (cloudDirty) { cloudDirty = false; scheduleCloudSave(); }
+}
+
+async function manualSync() {
+  if (!driveCfg || !driveCfg.folderId) return;
+  if (!driveToken || Date.now() >= (driveCfg.tokenExpiry || 0)) {
+    const ok = await connectDrive('select_account');
+    if (!ok) return;
+  }
+  if (!driveCfg.folderId) { openFolderPicker(); return; }
+  closeDriveModal();
+  cloudSave();
+}
+
+async function changeFolder() {
+  if (!driveToken || Date.now() >= ((driveCfg && driveCfg.tokenExpiry) || 0)) {
+    const ok = await connectDrive('select_account');
+    if (!ok) return;
+  }
+  openFolderPicker();
+}
+
+async function switchAccount() {
+  const ok = await connectDrive('select_account');
+  if (!ok) return;
+  openFolderPicker();
+}
+
+function disconnectDrive() {
+  if (!window.confirm('取消連接 Google Drive？本機資料會保留，但唔會再同步上雲端。')) return;
+  if (window.google && google.accounts && google.accounts.oauth2 && driveCfg && driveCfg.accountEmail) {
+    try { google.accounts.oauth2.revokeToken(driveCfg.accountEmail); } catch (err) {}
+  }
+  driveCfg = null;
+  driveToken = null;
+  persistDriveCfg();
+  try { localStorage.removeItem(DRIVE_DISMISS_KEY); } catch (err) {}
+  setDriveStatus('off');
+  showDriveView(GOOGLE_CLIENT_ID ? 'connect' : 'setup');
+}
+
+function renderDrivePanel() {
+  const body = $('#drivePanelBody');
+  body.textContent = '';
+  const rows = [
+    ['帳戶', (driveCfg && driveCfg.accountEmail) || '—'],
+    ['儲存資料夾', (driveCfg && driveCfg.folderName) || '—'],
+    ['雲端檔案', DRIVE_FILE_NAME],
+    ['最後同步', driveCfg && driveCfg.lastSync ? new Date(driveCfg.lastSync).toLocaleString() : '—']
+  ];
+  rows.forEach(r => {
+    const row = el('div', 'drive-panel-row');
+    row.appendChild(el('span', 'drive-panel-key', r[0]));
+    row.appendChild(el('span', 'drive-panel-val', r[1]));
+    body.appendChild(row);
+  });
+  const btns = el('div', 'drive-panel-btns');
+  const needLogin = !driveToken || Date.now() >= ((driveCfg && driveCfg.tokenExpiry) || 0);
+  const syncBtn = el('button', 'btn btn-ink', needLogin ? '🔑 登入並同步' : '⬆ 立即同步');
+  syncBtn.addEventListener('click', manualSync);
+  const folderBtn = el('button', 'btn', '📁 更改儲存資料夾');
+  folderBtn.addEventListener('click', changeFolder);
+  const acctBtn = el('button', 'btn', '👤 切換 Google 帳戶');
+  acctBtn.addEventListener('click', switchAccount);
+  const offBtn = el('button', 'btn btn-danger', '✕ 取消連接');
+  offBtn.addEventListener('click', disconnectDrive);
+  btns.appendChild(syncBtn);
+  btns.appendChild(folderBtn);
+  btns.appendChild(acctBtn);
+  btns.appendChild(offBtn);
+  body.appendChild(btns);
+}
+
+$('#driveBtn').addEventListener('click', openDriveModal);
+$('#driveClose').addEventListener('click', closeDriveModal);
+$('#driveModal').addEventListener('click', e => {
+  if (e.target === $('#driveModal')) closeDriveModal();
+});
+$('#driveLoginBtn').addEventListener('click', async () => {
+  const ok = await connectDrive('select_account');
+  if (ok) openFolderPicker();
+});
+$('#driveUseFolder').addEventListener('click', usePickerFolder);
+$('#driveNewFolder').addEventListener('click', () => {
+  openPrompt('新增資料夾', '', async name => {
+    const cur = pickerStack[pickerStack.length - 1];
+    try {
+      const meta = await driveFetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name, mimeType: 'application/vnd.google-apps.folder', parents: [cur.id] })
+      });
+      pickerStack.push({ id: meta.id, name: meta.name || name });
+      renderPicker();
+    } catch (err) {
+      if (err.message === 'UNAUTHORIZED') handleDriveUnauthorized();
+      else alert('建立資料夾失敗：' + err.message);
+    }
+  }, '資料夾名稱');
+});
+
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
   if (!$('#promptModal').classList.contains('hidden')) { closePrompt(); return; }
   if (!$('#taskModal').classList.contains('hidden')) { closeTaskModal(); return; }
+  if (!$('#driveModal').classList.contains('hidden')) { closeDriveModal(); return; }
   closeProjectMenu();
 });
 
 buildPalette();
 buildStatusSeg();
 renderBoard();
+updateDriveBtn();
+if ((!driveCfg || !driveCfg.folderId) && !localStorage.getItem(DRIVE_DISMISS_KEY)) {
+  setTimeout(openDriveModal, 700);
+}
 </script>
 </body>
 </html>
