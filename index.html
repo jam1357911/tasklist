@@ -266,6 +266,11 @@ input,textarea{font-family:inherit;color:inherit;}
   box-shadow:0 18px 34px rgba(25,22,19,.30);
   transition:none;
 }
+.drop-slot{
+  flex:none;height:10px;border-radius:999px;
+  background:rgba(25,22,19,.22);
+  margin:2px 0;
+}
 
 .modal-backdrop{
   position:fixed;inset:0;z-index:100;
@@ -855,6 +860,27 @@ function moveTask(taskId, dir) {
   renderBoard();
 }
 
+function placeTask(taskId, status, beforeId) {
+  const idx = state.tasks.findIndex(t => t.id === taskId);
+  if (idx === -1) return;
+  const task = state.tasks.splice(idx, 1)[0];
+  task.status = status;
+  task.updatedAt = Date.now();
+  if (beforeId) {
+    const bIdx = state.tasks.findIndex(t => t.id === beforeId);
+    if (bIdx !== -1) state.tasks.splice(bIdx, 0, task);
+    else state.tasks.push(task);
+  } else {
+    let after = -1;
+    for (let i = state.tasks.length - 1; i >= 0; i--) {
+      if (state.tasks[i].projectId === task.projectId && state.tasks[i].status === status) { after = i; break; }
+    }
+    if (after === -1) state.tasks.push(task);
+    else state.tasks.splice(after + 1, 0, task);
+  }
+  save();
+}
+
 let drag = null;
 
 function findColumnAt(x, y) {
@@ -864,6 +890,29 @@ function findColumnAt(x, y) {
 
 function setDropHot(col) {
   $$('.column').forEach(c => c.classList.toggle('drop-hot', c === col));
+}
+
+function computeDropTarget(x, y) {
+  const col = findColumnAt(x, y);
+  if (!col) return null;
+  const cards = $$('.card:not(.drag-src)', col);
+  let before = null;
+  for (const c of cards) {
+    const r = c.getBoundingClientRect();
+    if (y < r.top + r.height / 2) { before = c; break; }
+  }
+  return { col: col, before: before };
+}
+
+function updateDragTarget(target) {
+  if (!drag) return;
+  drag.dropTarget = target ? { status: target.col.dataset.status, beforeId: target.before ? target.before.dataset.id : null } : null;
+  setDropHot(target ? target.col : null);
+  const ph = drag.ph;
+  if (!ph) return;
+  if (!target) { if (ph.parentNode) ph.remove(); return; }
+  const bodyEl = $('.col-body', target.col);
+  if (ph.parentNode !== bodyEl || ph.nextElementSibling !== target.before) bodyEl.insertBefore(ph, target.before);
 }
 
 function startDrag(x, y) {
@@ -880,6 +929,8 @@ function startDrag(x, y) {
   drag.ghost = ghost;
   drag.el.classList.add('drag-src');
   document.body.classList.add('dragging');
+  drag.ph = el('div', 'drop-slot');
+  drag.dropTarget = null;
   if (navigator.vibrate) { try { navigator.vibrate(10); } catch (err) {} }
 }
 
@@ -903,13 +954,14 @@ function onPointerMove(e) {
   drag.ghost.style.top = (e.clientY - drag.offY) + 'px';
   if (e.clientX < 70) boardEl.scrollLeft -= 14;
   else if (e.clientX > window.innerWidth - 70) boardEl.scrollLeft += 14;
-  setDropHot(findColumnAt(e.clientX, e.clientY));
+  updateDragTarget(computeDropTarget(e.clientX, e.clientY));
 }
 
 function cancelDrag() {
   if (!drag) return;
   if (drag.timer) clearTimeout(drag.timer);
   if (drag.ghost) drag.ghost.remove();
+  if (drag.ph && drag.ph.parentNode) drag.ph.remove();
   if (drag.el) drag.el.classList.remove('drag-src');
   document.body.classList.remove('dragging');
   setDropHot(null);
@@ -927,14 +979,13 @@ function onPointerUp(e) {
   document.removeEventListener('pointerup', onPointerUp);
   document.removeEventListener('pointercancel', onPointerCancel);
   if (d.started) {
-    const col = findColumnAt(d.lastX != null ? d.lastX : e.clientX, d.lastY != null ? d.lastY : e.clientY);
+    const x = d.lastX != null ? d.lastX : e.clientX;
+    const y = d.lastY != null ? d.lastY : e.clientY;
+    const target = computeDropTarget(x, y);
     const task = state.tasks.find(t => t.id === d.taskId);
-    if (col && task && col.dataset.status !== task.status) {
-      task.status = col.dataset.status;
-      task.updatedAt = Date.now();
-      save();
-    }
+    if (target && task) placeTask(task.id, target.col.dataset.status, target.before ? target.before.dataset.id : null);
     if (d.ghost) d.ghost.remove();
+    if (d.ph && d.ph.parentNode) d.ph.remove();
     if (d.el) d.el.classList.remove('drag-src');
     document.body.classList.remove('dragging');
     setDropHot(null);
